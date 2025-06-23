@@ -1,16 +1,23 @@
 from contextlib import asynccontextmanager
 from starlette.applications import Starlette
 from starlette.templating import Jinja2Templates
-from starlette.staticfiles import StaticFiles
+from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette_admin.contrib.sqla import Admin, ModelView
 from starlette_admin.fields import PasswordField
 from starlette_admin.exceptions import FormValidationError
 from starlette_admin import RequestAction
-from starlette_admin import statics
+from dotenv import load_dotenv
+import os
 
-from models import create_db, User
+from models import create_db, User, Post
 from db import engine
+from auth import UsernameAndPasswordProvider
 import utils
+
+
+load_dotenv()
+SECRET = os.getenv('SECRET')
 
 
 @asynccontextmanager
@@ -40,7 +47,9 @@ admin = Admin(
     favicon_url=f"{base_url}/statics/favicon.ico",
     debug=True,
     logo_url=f'{base_url}/statics/logo.svg',
-    templates_dir='templates/admin'
+    templates_dir='templates/admin',
+    auth_provider=UsernameAndPasswordProvider(),
+    middlewares=[Middleware(SessionMiddleware, secret_key=SECRET)],
 )
 
 
@@ -97,5 +106,12 @@ class UserModelView(ModelView):
         return super().before_create(request, data, obj)
 
 
+class PostModelView(ModelView):
+    exclude_fields_from_create = ['created_at', 'updated_at']
+
+
 admin.add_view(UserModelView(User, 'fa-solid fa-users', 'User', 'Users'))
+admin.add_view(PostModelView(Post, 'fa-brands fa-wordpress', 'Post', 'Posts'))
+
+
 admin.mount_to(app)
