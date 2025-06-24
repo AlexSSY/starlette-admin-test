@@ -17,7 +17,7 @@ import utils
 
 
 load_dotenv()
-SECRET = os.getenv('SECRET')
+SECRET = os.getenv("SECRET")
 
 
 @asynccontextmanager
@@ -46,8 +46,8 @@ admin = Admin(
     base_url=base_url,
     favicon_url=f"{base_url}/statics/favicon.ico",
     debug=True,
-    logo_url=f'{base_url}/statics/logo.svg',
-    templates_dir='templates/admin',
+    logo_url=f"{base_url}/statics/logo.svg",
+    templates_dir="templates/admin",
     auth_provider=UsernameAndPasswordProvider(),
     middlewares=[Middleware(SessionMiddleware, secret_key=SECRET)],
 )
@@ -68,6 +68,14 @@ class UserModelView(ModelView):
             exclude_from_detail=True,
         ),
         PasswordField(
+            'new_password',
+            'New Password',
+            required=True,
+            exclude_from_create=True,
+            exclude_from_list=True,
+            exclude_from_detail=True
+        ),
+        PasswordField(
             "password_confirmation",
             "Password Confirmation",
             required=True,
@@ -77,10 +85,12 @@ class UserModelView(ModelView):
         "password_hash",
         "created_at",
         "updated_at",
+        "posts"
     ]
 
-    def validate(self, request, data):
+    async def validate(self, request, data):
         errors = dict()
+        parent_validation = await super().validate(request, data)
 
         # * ultra DB-UNIQUE
         if request.state.action == RequestAction.CREATE:
@@ -92,13 +102,33 @@ class UserModelView(ModelView):
             ):
                 errors["email"] = "already exists"
 
-        if len(data["password"]) < 6:
-            errors["password"] = "too short, minimum 6 symbols"
-        if data["password"] != data["password_confirmation"]:
-            errors["password_confirmation"] = "password not match"
+            if len(data["password"]) < 6:
+                errors["password"] = "too short, minimum 6 symbols"
+
+            if data["password"] != data["password_confirmation"]:
+                errors["password_confirmation"] = "password not match"
+
+        elif request.state.action == RequestAction.EDIT:
+            
+
+            if len(data["new_password"]) < 6:
+                errors["new_password"] = "too short, minimum 6 symbols"
+
+            if data["new_password"] != data["password_confirmation"]:
+                errors["password_confirmation"] = "password not match"
+
         if len(errors) > 0:
             raise FormValidationError(errors)
-        return super().validate(request, data)
+        return parent_validation
+    
+    def before_edit(self, request, data, obj):
+        if not utils.check_password(data.get("password"), obj.password_hash):
+            raise FormValidationError({
+                'password': 'wrong password'
+            })
+        plain_password = data.get("new_password")
+        obj.password_hash = utils.hash_password(plain_password)
+        return super().before_edit(request, data, obj)
 
     def before_create(self, request, data, obj):
         plain_password = data.get("password")
@@ -107,11 +137,39 @@ class UserModelView(ModelView):
 
 
 class PostModelView(ModelView):
-    exclude_fields_from_create = ['created_at', 'updated_at']
+    exclude_fields_from_create = ["created_at", "updated_at"]
+    fields = [
+        "id", 
+        "title", 
+        "body", 
+        # HasOne(name='user_id', label='Author', identity='user', required=True),
+        # IntegerField (name="user_id", label='Author ID', required=True),
+        "author",
+        "created_at", 
+        "updated_at"
+    ]
+
+    async def  validate(self, request, data):
+        errors = {}
+        if request.state.action == RequestAction.CREATE:
+            session = request.state.session
+            if (
+                session.query(self.model)
+                .where(self.model.title == data["title"])
+                .first()
+            ):
+                errors["title"] = "already exists"
+
+        if data["author"] is None:
+            errors["author"] = "author is required"
+
+        if len(errors) > 0:
+            raise FormValidationError(errors)
+        return await super().validate(request, data)
 
 
-admin.add_view(UserModelView(User, 'fa-solid fa-users', 'User', 'Users'))
-admin.add_view(PostModelView(Post, 'fa-brands fa-wordpress', 'Post', 'Posts'))
+admin.add_view(UserModelView(User, "fa-solid fa-users"))
+admin.add_view(PostModelView(Post, "fa-brands fa-wordpress"))
 
 
 admin.mount_to(app)
