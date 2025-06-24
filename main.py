@@ -1,12 +1,11 @@
 from contextlib import asynccontextmanager
+from html import escape
 from starlette.applications import Starlette
 from starlette.templating import Jinja2Templates
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette_admin.contrib.sqla import Admin, ModelView
-from starlette_admin.fields import PasswordField
-from starlette_admin.exceptions import FormValidationError
-from starlette_admin import RequestAction
+from starlette_admin.contrib.sqla import Admin
+from starlette_admin.fields import PasswordField, TinyMCEEditorField, IntegerField
 from dotenv import load_dotenv
 import os
 
@@ -58,9 +57,9 @@ admin = Admin(
 class UserModelView(MyModelView):
     exclude_fields_from_create = ["created_at", "updated_at", "password_hash"]
     exclude_fields_from_edit = ["created_at", "updated_at", "password_hash"]
-    exclude_fields_from_list = ["password_hash"]
+    exclude_fields_from_list = ["password_hash", "posts"]
     fields = [
-        "id",
+        IntegerField(name="id", label='<span class="text-success">ID</span>'),
         "email",
         PasswordField(
             "password",
@@ -96,82 +95,48 @@ class UserModelView(MyModelView):
         "password_confirmation": [validators.match_validator("password")]
     }
 
-    # async def validate(self, request, data):
-    #     errors = dict()
-    #     parent_validation = await super().validate(request, data)
-
-    #     # * ultra DB-UNIQUE
-    #     if request.state.action == RequestAction.CREATE:
-    #         session = request.state.session
-    #         if (
-    #             session.query(self.model)
-    #             .where(self.model.email == data["email"])
-    #             .first()
-    #         ):
-    #             errors["email"] = "already exists"
-
-    #         if len(data["password"]) < 6:
-    #             errors["password"] = "too short, minimum 6 symbols"
-
-    #         if data["password"] != data["password_confirmation"]:
-    #             errors["password_confirmation"] = "password not match"
-
-    #     elif request.state.action == RequestAction.EDIT:
-    #         if len(data["new_password"]) < 6:
-    #             errors["new_password"] = "too short, minimum 6 symbols"
-
-    #         if data["new_password"] != data["password_confirmation"]:
-    #             errors["password_confirmation"] = "password not match"
-
-    #     if len(errors) > 0:
-    #         raise FormValidationError(errors)
-    #     return parent_validation
+    edit_validators = {
+        "password": [validators.check_password_validator(utils.check_password)],
+        "password_confirmation": [validators.match_validator("new_password")]
+    }
     
-    def before_edit(self, request, data, obj):
-        if not utils.check_password(data.get("password"), obj.password_hash):
-            raise FormValidationError({
-                'password': 'wrong password'
-            })
+    async def before_edit(self, request, data, obj):
+        await super().before_edit(request, data, obj)
         plain_password = data.get("new_password")
         obj.password_hash = utils.hash_password(plain_password)
-        return super().before_edit(request, data, obj)
 
-    def before_create(self, request, data, obj):
+    async def before_create(self, request, data, obj):
         plain_password = data.get("password")
         obj.password_hash = utils.hash_password(plain_password)
-        return super().before_create(request, data, obj)
+        await super().before_create(request, data, obj)
+
+    async def repr(self, obj, request):
+        return obj.email
 
 
-class PostModelView(ModelView):
+class PostModelView(MyModelView):
     exclude_fields_from_create = ["created_at", "updated_at"]
     fields = [
         "id", 
         "title", 
-        "body", 
-        # HasOne(name='user_id', label='Author', identity='user', required=True),
-        # IntegerField (name="user_id", label='Author ID', required=True),
+        TinyMCEEditorField(name="body", label="Body", required=True), 
         "author",
         "created_at", 
         "updated_at"
     ]
 
-    async def  validate(self, request, data):
-        errors = {}
-        if request.state.action == RequestAction.CREATE:
-            session = request.state.session
-            if (
-                session.query(self.model)
-                .where(self.model.title == data["title"])
-                .first()
-            ):
-                errors["title"] = "already exists"
+    create_validators = {
+        "title": [validators.unique_validator()],
+        "author": [validators.required_validator()]
+    }
 
-        if data["author"] is None:
-            errors["author"] = "author is required"
+    async def repr(self, obj, request):
+        return obj.title
 
-        if len(errors) > 0:
-            raise FormValidationError(errors)
-        return await super().validate(request, data)
+    async def select2_result(self, obj, request):
+        result =  f'<span><strong>{escape(str(obj.id))}</strong> - {escape(obj.title)}</span>'
+        return result
+        # return await super().select2_result(obj, request)
 
 
 admin.add_view(UserModelView(User, "fa-solid fa-users"))

@@ -59,3 +59,22 @@ def match_validator(other_field):
             return f"does not match with '{other_field}' field"
 
     return validator
+
+
+def required_validator():
+
+    def validator(model, obj, field, data, request):
+        if data.get(field) is None:
+            return "required"
+
+    return validator
+
+
+def check_password_validator(check_password_callback):
+
+    def validator(model, obj, field, data, request):
+        plain_password = data.get(field)
+        if not check_password_callback(plain_password, obj.password_hash):
+            return "wrong password"
+
+    return validator

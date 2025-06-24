@@ -39,5 +39,13 @@ class Post(BaseColumnsMixin, Base):
     author = relationship("User", back_populates="posts")
 
 
+class Comment(BaseColumnsMixin, Base):
+    __tablename__ = "comments"
+
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    text = Column(String, nullable=False)
+
+
 def create_db():
     Base.metadata.create_all(engine)
