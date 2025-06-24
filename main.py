@@ -14,6 +14,8 @@ from models import create_db, User, Post
 from db import engine
 from auth import UsernameAndPasswordProvider
 import utils
+from admin_view import MyModelView
+import validators
 
 
 load_dotenv()
@@ -53,7 +55,7 @@ admin = Admin(
 )
 
 
-class UserModelView(ModelView):
+class UserModelView(MyModelView):
     exclude_fields_from_create = ["created_at", "updated_at", "password_hash"]
     exclude_fields_from_edit = ["created_at", "updated_at", "password_hash"]
     exclude_fields_from_list = ["password_hash"]
@@ -88,38 +90,42 @@ class UserModelView(ModelView):
         "posts"
     ]
 
-    async def validate(self, request, data):
-        errors = dict()
-        parent_validation = await super().validate(request, data)
+    create_validators = {
+        "email": [validators.unique_validator()],
+        "password": [validators.min_length_validator(6)],
+        "password_confirmation": [validators.match_validator("password")]
+    }
 
-        # * ultra DB-UNIQUE
-        if request.state.action == RequestAction.CREATE:
-            session = request.state.session
-            if (
-                session.query(self.model)
-                .where(self.model.email == data["email"])
-                .first()
-            ):
-                errors["email"] = "already exists"
+    # async def validate(self, request, data):
+    #     errors = dict()
+    #     parent_validation = await super().validate(request, data)
 
-            if len(data["password"]) < 6:
-                errors["password"] = "too short, minimum 6 symbols"
+    #     # * ultra DB-UNIQUE
+    #     if request.state.action == RequestAction.CREATE:
+    #         session = request.state.session
+    #         if (
+    #             session.query(self.model)
+    #             .where(self.model.email == data["email"])
+    #             .first()
+    #         ):
+    #             errors["email"] = "already exists"
 
-            if data["password"] != data["password_confirmation"]:
-                errors["password_confirmation"] = "password not match"
+    #         if len(data["password"]) < 6:
+    #             errors["password"] = "too short, minimum 6 symbols"
 
-        elif request.state.action == RequestAction.EDIT:
-            
+    #         if data["password"] != data["password_confirmation"]:
+    #             errors["password_confirmation"] = "password not match"
 
-            if len(data["new_password"]) < 6:
-                errors["new_password"] = "too short, minimum 6 symbols"
+    #     elif request.state.action == RequestAction.EDIT:
+    #         if len(data["new_password"]) < 6:
+    #             errors["new_password"] = "too short, minimum 6 symbols"
 
-            if data["new_password"] != data["password_confirmation"]:
-                errors["password_confirmation"] = "password not match"
+    #         if data["new_password"] != data["password_confirmation"]:
+    #             errors["password_confirmation"] = "password not match"
 
-        if len(errors) > 0:
-            raise FormValidationError(errors)
-        return parent_validation
+    #     if len(errors) > 0:
+    #         raise FormValidationError(errors)
+    #     return parent_validation
     
     def before_edit(self, request, data, obj):
         if not utils.check_password(data.get("password"), obj.password_hash):
