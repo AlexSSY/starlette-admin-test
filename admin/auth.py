@@ -3,9 +3,9 @@ from starlette.responses import Response
 from starlette_admin.auth import AdminUser, AuthProvider, AdminConfig
 from starlette_admin.exceptions import LoginFailed
 
-from models import User
+from app.models import User
 from db import SessionLocal
-from utils import check_password
+from app.utils import check_password
 
 
 auth_exception = LoginFailed('invalid credentials')

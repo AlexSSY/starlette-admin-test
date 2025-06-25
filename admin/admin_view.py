@@ -1,7 +1,7 @@
 from starlette_admin.contrib.sqla.view import ModelView
 from starlette_admin.exceptions import FormValidationError
 from starlette_admin import RequestAction
-from validators import ValidatorsMixin
+from .validators import ValidatorsMixin
 
 
 class MyModelView(ValidatorsMixin, ModelView):
