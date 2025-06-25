@@ -7,9 +7,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette_admin.contrib.sqla import Admin
 from starlette_admin.fields import PasswordField, TinyMCEEditorField, IntegerField
 from dotenv import load_dotenv
+from markupsafe import Markup
 import os
 
-from models import create_db, User, Post
+from models import create_db, User, Post, Comment
 from db import engine
 from auth import UsernameAndPasswordProvider
 import utils
@@ -59,7 +60,7 @@ class UserModelView(MyModelView):
     exclude_fields_from_edit = ["created_at", "updated_at", "password_hash"]
     exclude_fields_from_list = ["password_hash", "posts"]
     fields = [
-        IntegerField(name="id", label='<span class="text-success">ID</span>'),
+        IntegerField(name="id", label=Markup('<span class="text-success">ID</span>')),
         "email",
         PasswordField(
             "password",
@@ -86,7 +87,8 @@ class UserModelView(MyModelView):
         "password_hash",
         "created_at",
         "updated_at",
-        "posts"
+        "posts",
+        "comments"
     ]
 
     create_validators = {
@@ -112,15 +114,22 @@ class UserModelView(MyModelView):
 
     async def repr(self, obj, request):
         return obj.email
+    
+    async def select2_result(self, obj, request):
+        return f'<span><strong>{escape(str(obj.id))}</strong> - {escape(obj.email)}</span>'
 
 
 class PostModelView(MyModelView):
-    exclude_fields_from_create = ["created_at", "updated_at"]
+    exclude_fields_from_create = ["created_at", "updated_at", "comments_count"]
+    exclude_fields_from_edit = ["created_at", "updated_at", "comments_count"]
+    exclude_fields_from_list = ["comments"]
     fields = [
         "id", 
         "title", 
         TinyMCEEditorField(name="body", label="Body", required=True), 
         "author",
+        "comments",
+        IntegerField("comments_count"),
         "created_at", 
         "updated_at"
     ]
@@ -130,17 +139,28 @@ class PostModelView(MyModelView):
         "author": [validators.required_validator()]
     }
 
+    edit_validators = {
+        "title": [validators.unique_edit_validator()]
+    }
+
     async def repr(self, obj, request):
         return obj.title
 
     async def select2_result(self, obj, request):
-        result =  f'<span><strong>{escape(str(obj.id))}</strong> - {escape(obj.title)}</span>'
-        return result
-        # return await super().select2_result(obj, request)
+        return f'<span><strong>{escape(str(obj.id))}</strong> - {escape(obj.title)}</span>'
+
+
+class CommentModelView(MyModelView):
+    exclude_fields_from_create = ["created_at", "updated_at"]
+    exclude_fields_from_edit = ["created_at", "updated_at"]
+
+    async def repr(self, obj, request):
+        return obj.text
 
 
 admin.add_view(UserModelView(User, "fa-solid fa-users"))
 admin.add_view(PostModelView(Post, "fa-brands fa-wordpress"))
+admin.add_view(CommentModelView(Comment, "fa-solid fa-comments"))
 
 
 admin.mount_to(app)

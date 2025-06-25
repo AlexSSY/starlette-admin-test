@@ -52,6 +52,19 @@ def unique_validator():
     return validator
 
 
+def unique_edit_validator():
+
+    def validator(model, obj, field, data, request):
+        model_field = getattr(model, field)
+        field_value = data.get(field)
+        session = request.state.session
+        with session.no_autoflush:
+            if session.query(model).filter(model_field == field_value, model.id != obj.id).first():
+                return "already exists"
+        
+    return validator
+
+
 def match_validator(other_field):
 
     def validator(model, obj, field, data, request):
