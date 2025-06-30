@@ -3,3 +3,4 @@
 *.sqlite
 *.pyc
 *.env
+zadov.py
