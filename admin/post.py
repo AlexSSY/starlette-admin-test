@@ -5,6 +5,11 @@ from .admin_view import MyModelView
 from . import validators
 
 
+class CommentsCountField(IntegerField):
+    async def parse_obj(self, request, obj):
+        return obj.comments_count
+
+
 class PostModelView(MyModelView):
     exclude_fields_from_create = ["created_at", "updated_at", "comments_count", "comments"]
     exclude_fields_from_edit = ["created_at", "updated_at", "comments_count", "comments"]
@@ -15,7 +20,7 @@ class PostModelView(MyModelView):
         TinyMCEEditorField(name="body", label="Body", required=True), 
         "author",
         "comments",
-        IntegerField("comments_count"),
+        CommentsCountField("comments_count", render_function_key="post_comments_count"),
         DateTimeField("created_at", output_format="%B %d, %Y %H:%M:%S"), 
         "updated_at"
     ]

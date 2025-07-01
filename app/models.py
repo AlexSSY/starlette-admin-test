@@ -1,7 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Integer, String, Text, ForeignKey, select, func
-from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import declared_attr, relationship
+from sqlalchemy.orm import declared_attr, relationship, column_property
 from db import Base, engine
 
 
@@ -40,19 +39,7 @@ class Post(BaseColumnsMixin, Base):
 
     author = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post")
-    
-    @hybrid_property
-    def comments_count(self):
-        return len(self.comments)
-    
-    @comments_count.expression
-    def comments_count(cls):
-        return (
-            select(func.count(Comment.id))
-            .where(Comment.post_id == cls.id)
-            .scalar_subquery()
-        )
-
+        
 
 class Comment(BaseColumnsMixin, Base):
     __tablename__ = "comments"
@@ -63,6 +50,14 @@ class Comment(BaseColumnsMixin, Base):
 
     post = relationship("Post", back_populates="comments")
     author = relationship("User", back_populates="comments")
+
+
+Post.comments_count = column_property(
+    select(func.count(Comment.id))
+    .where(Comment.post_id == Post.id)
+    .correlate_except(Comment)
+    .scalar_subquery()
+)
 
 
 def create_db():
